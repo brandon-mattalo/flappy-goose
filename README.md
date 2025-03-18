@@ -1,6 +1,7 @@
 # Flappy Goose 🦢
 
-A Canadian-themed Flappy Bird clone where you guide a goose through a winter wonderland, avoiding trees and collecting points. Features include:
+A Canadian-themed Flappy Bird clone where you guide a goose through a winter wonderland, avoiding trees and 
+collecting points. Features include:
 
 - Multiple goose colors to choose from
 - Global high score system with country flags
@@ -10,7 +11,7 @@ A Canadian-themed Flappy Bird clone where you guide a goose through a winter won
 
 ## Play Online
 
-Visit [https://YOUR_USERNAME.github.io/flappy-goose](https://YOUR_USERNAME.github.io/flappy-goose) to play!
+Visit [https://brandon-mattalo.github.io/flappy-goose](https://brandon-mattalo.github.io/flappy-goose) to play!
 
 ## Controls
 
@@ -34,7 +35,7 @@ This game is built using vanilla JavaScript, HTML5 Canvas, and IndexedDB for hig
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/YOUR_USERNAME/flappy-goose.git
+git clone https://github.com/brandon-mattalo/flappy-goose.git
 ```
 
 2. Open `index.html` in your browser
