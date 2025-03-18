@@ -63,6 +63,25 @@ class FlappyGoose {
             }
         });
         
+        // Add click/touch support
+        this.canvas.addEventListener('click', (e) => {
+            if (!this.isPlaying && this.canRestart) {
+                this.start();
+            } else if (this.isPlaying) {
+                this.jump();
+            }
+        });
+        
+        // Add touch support for mobile
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent scrolling
+            if (!this.isPlaying && this.canRestart) {
+                this.start();
+            } else if (this.isPlaying) {
+                this.jump();
+            }
+        });
+        
         // Fix high scores button event listeners
         const highScoresButtons = document.querySelectorAll('#highScoresButton');
         highScoresButtons.forEach(button => {

@@ -12,23 +12,42 @@ class HighScoreManager {
 
     async requestInitialLocation() {
         try {
+            // First check if geolocation is supported
+            if (!navigator.geolocation) {
+                throw new Error('Geolocation is not supported by your browser');
+            }
+
+            // Check if we already have permission
+            const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+            
+            if (permissionStatus.state === 'denied') {
+                throw new Error('Location permission was denied');
+            }
+
+            // If permission is granted or prompt, try to get location
             const position = await new Promise((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true,
-                    timeout: 5000,
-                    maximumAge: 0
+                    enableHighAccuracy: false, // Set to false for faster response
+                    timeout: 10000, // Increased timeout for mobile
+                    maximumAge: 300000 // Cache location for 5 minutes
                 });
             });
 
             const { latitude, longitude } = position.coords;
             const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}`);
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch location data');
+            }
+
             const data = await response.json();
             this.cachedLocation = {
                 country: data.countryCode,
                 countryName: data.countryName
             };
         } catch (error) {
-            console.log('Location permission denied or error:', error);
+            console.log('Location error:', error.message);
+            // Set default location and continue
             this.cachedLocation = {
                 country: 'XX',
                 countryName: 'Unknown'

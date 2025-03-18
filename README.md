@@ -16,12 +16,13 @@ Visit [https://brandon-mattalo.github.io/flappy-goose](https://brandon-mattalo.g
 ## Controls
 
 - Press SPACE to make the goose flap
+- Click or tap the screen to make the goose flap
 - Avoid the trees
 - Try to get the highest score
 
 ## Features
 
-- 🎮 Simple one-button gameplay
+- 🎮 Simple controls (keyboard, mouse, or touch)
 - 🦢 Multiple goose colors
 - 🌎 Global high scores with country tracking
 - 🍁 Canadian-themed visuals
