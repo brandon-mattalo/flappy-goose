@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Flappy Goose</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
@@ -13,16 +13,24 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            min-height: -webkit-fill-available;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             font-family: 'Press Start 2P', cursive;
             color: #fff;
             overflow: hidden;
+            touch-action: manipulation;
+            position: fixed;
+            width: 100%;
+            height: 100%;
         }
 
         .game-container {
             position: relative;
-            width: 400px;
-            height: 600px;
+            width: 100%;
+            max-width: 400px;
+            height: 100vh;
+            max-height: 600px;
+            aspect-ratio: 2/3;
             background: rgba(0, 0, 0, 0.7);
             border-radius: 20px;
             box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
@@ -59,10 +67,9 @@
         }
 
         canvas {
-            border: 4px solid #8B0000;
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
-            background: linear-gradient(180deg, #FF0000 0%, #FFFFFF 50%, #FF0000 100%);
-            opacity: 1;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         .screen {
@@ -233,6 +240,16 @@
             border: 2px solid #0f0;
             text-align: center;
             width: 200px;
+            font-size: 16px;
+            -webkit-appearance: none;
+            border-radius: 0;
+        }
+
+        /* Prevent iOS zoom on input focus */
+        @supports (-webkit-touch-callout: none) {
+            .score-input {
+                font-size: 16px;
+            }
         }
 
         .score-entry {
@@ -486,6 +503,187 @@
             50% { transform: translateY(-20px) rotate(5deg); }
             100% { transform: translateY(0px) rotate(0deg); }
         }
+
+        #highScoresList {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+            width: 100%;
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: #FF0000 rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            border-radius: 5px;
+            padding: 5px;
+        }
+
+        #highScoresList::-webkit-scrollbar {
+            width: 8px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        #highScoresList::-webkit-scrollbar-thumb {
+            background: #FF0000;
+            border-radius: 4px;
+        }
+
+        #highScoresList::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+
+        #highScoresList li {
+            display: grid;
+            grid-template-columns: 25px minmax(60px, 1fr) 40px 55px 45px;
+            gap: 8px;
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            border-radius: 5px;
+            font-size: 10px;
+            align-items: center;
+        }
+
+        #highScoresList .rank {
+            text-align: center;
+            font-weight: bold;
+            color: #FF0000;
+            font-size: 10px;
+        }
+
+        #highScoresList .name {
+            color: #FFFFFF;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 0 5px;
+        }
+
+        #highScoresList .score {
+            color: #00FF00;
+            text-align: right;
+            font-size: 10px;
+        }
+
+        #highScoresList .country {
+            color: #FFFFFF;
+            text-align: center;
+            font-size: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            letter-spacing: 1px;
+        }
+
+        #highScoresList .date {
+            color: #888888;
+            text-align: right;
+            font-size: 9px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .high-scores-controls {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            width: 100%;
+            justify-content: center;
+            align-items: center;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+
+        .high-scores-controls button,
+        .high-scores-controls select {
+            flex: 1;
+            max-width: 150px;
+            min-width: 120px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-button {
+            padding: 8px 16px;
+            font-size: 10px;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sort-select {
+            font-family: 'Press Start 2P', cursive;
+            padding: 8px;
+            font-size: 10px;
+            background: #8B0000;
+            color: #fff;
+            border: 2px solid #FF0000;
+            cursor: pointer;
+        }
+
+        /* Make the high scores screen more compact */
+        #highScoresScreen {
+            padding: 10px !important;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #highScoresScreen h2 {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 360px) {
+            #highScoresList li {
+                grid-template-columns: 20px minmax(50px, 1fr) 35px 45px 40px;
+                font-size: 8px;
+                padding: 6px;
+                gap: 4px;
+            }
+
+            #highScoresList .date {
+                font-size: 7px;
+            }
+
+            .high-scores-controls button,
+            .high-scores-controls select {
+                min-width: 100px;
+            }
+        }
+
+        @keyframes scoreIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #highScoresList li {
+            animation: scoreIn 0.3s ease-out backwards;
+        }
+
+        #highScoresList li:nth-child(1) { animation-delay: 0.1s; }
+        #highScoresList li:nth-child(2) { animation-delay: 0.2s; }
+        #highScoresList li:nth-child(3) { animation-delay: 0.3s; }
+        #highScoresList li:nth-child(4) { animation-delay: 0.4s; }
+        #highScoresList li:nth-child(5) { animation-delay: 0.5s; }
+
+        #refreshScores:active {
+            animation: spin 0.5s linear;
+        }
     </style>
 </head>
 <body>
@@ -569,11 +767,29 @@
 
         <div id="highScoresScreen" class="screen hidden">
             <h2>High Scores</h2>
+            <div class="high-scores-controls">
+                <button id="refreshScores" class="icon-button">
+                    🔄 Refresh
+                </button>
+                <select id="sortScores" class="sort-select">
+                    <option value="score">Sort by Score</option>
+                    <option value="date">Sort by Date</option>
+                    <option value="country">Sort by Country</option>
+                </select>
+                <button id="purgeScores" class="icon-button" style="display: none;">
+                    🗑️ Purge
+                </button>
+            </div>
             <div id="highScoresList" class="high-scores"></div>
             <button id="backButton">Back</button>
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    
+    <!-- Game Scripts -->
     <script src="highscores.js"></script>
     <script src="game.js"></script>
 </body>

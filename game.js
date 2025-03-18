@@ -54,7 +54,13 @@ class FlappyGoose {
         
         // Event listeners
         document.addEventListener('keydown', (e) => {
+            // Prevent spacebar from triggering when inputting name
+            if (document.activeElement.id === 'playerName') {
+                return;
+            }
+            
             if (e.code === 'Space') {
+                e.preventDefault(); // Prevent page scroll
                 if (!this.isPlaying && this.canRestart) {
                     this.start();
                 } else if (this.isPlaying) {
@@ -96,6 +102,35 @@ class FlappyGoose {
             if (e.key === 'Enter') this.submitHighScore();
         });
         document.getElementById('changeGooseButton').addEventListener('click', () => this.showGooseSelection());
+        
+        // Add event listeners for high score controls
+        document.getElementById('refreshScores').addEventListener('click', () => this.refreshHighScores());
+        document.getElementById('sortScores').addEventListener('change', (e) => this.sortHighScores(e.target.value));
+        
+        // Add event listener for purge button (hidden by default)
+        const purgeButton = document.getElementById('purgeScores');
+        purgeButton.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to purge all high scores? This cannot be undone!')) {
+                const success = await this.highScoreManager.purgeDatabase();
+                if (success) {
+                    alert('High scores purged successfully!');
+                    this.showHighScores();
+                } else {
+                    alert('Failed to purge high scores. Please try again.');
+                }
+            }
+        });
+
+        // Show purge button with Ctrl+Shift+P
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.shiftKey && event.key === 'P') {
+                purgeButton.style.display = purgeButton.style.display === 'none' ? 'flex' : 'none';
+            }
+        });
+        
+        // Store high scores for sorting
+        this.currentScores = [];
+        this.currentSortMethod = 'score';
     }
 
     createStars() {
@@ -711,82 +746,31 @@ class FlappyGoose {
     }
 
     async submitHighScore() {
-        const nameInput = document.getElementById('playerName');
-        const name = nameInput.value.toUpperCase().trim();
-        
-        if (name.length >= 1 && name.length <= 10 && !this.scoreSubmitted) {
-            const result = await this.highScoreManager.addScore(name, this.score);
-            if (result.added) {
-                this.scoreSubmitted = true; // Mark score as submitted
-                nameInput.value = '';
-                document.getElementById('highScoreEntry').classList.add('hidden');
-                document.getElementById('gameOverOptions').classList.remove('hidden');
-                // Show high scores after submission
-                await this.showHighScores();
-            }
+        const playerName = document.getElementById('playerName').value.trim();
+        if (!playerName) {
+            alert('Please enter your name!');
+            return;
         }
-    }
 
-    async showHighScores() {
-        document.querySelectorAll('.screen').forEach(screen => {
-            screen.classList.remove('visible');
-            screen.classList.add('hidden');
-        });
-        
-        const highScoresScreen = document.getElementById('highScoresScreen');
-        highScoresScreen.classList.remove('hidden');
-        highScoresScreen.classList.add('visible');
-
-        // Update the high scores list
-        await this.updateHighScoresList();
-    }
-
-    async updateHighScoresList() {
-        const highScoresList = document.getElementById('highScoresList');
-        const scores = await this.highScoreManager.getScores();
-        
-        // Clear existing scores
-        highScoresList.innerHTML = '';
-        
-        // Add each score to the list
-        scores.forEach((score, index) => {
-            const scoreEntry = document.createElement('div');
-            scoreEntry.className = 'score-entry';
+        try {
+            console.log('Submitting score:', { name: playerName, score: this.score });
+            const success = await this.highScoreManager.addScore(playerName, this.score);
             
-            // Create flag element
-            const flagSpan = document.createElement('span');
-            flagSpan.className = 'flag';
-            flagSpan.textContent = score.country === 'XX' ? '🌎' : this.getFlagEmoji(score.country);
-            
-            const rankSpan = document.createElement('span');
-            rankSpan.className = 'rank';
-            rankSpan.textContent = `${this.getOrdinal(index + 1)}`;
-            
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'name';
-            nameSpan.textContent = score.name;
-            
-            const scoreSpan = document.createElement('span');
-            scoreSpan.className = 'score';
-            scoreSpan.textContent = score.score;
-            
-            scoreEntry.appendChild(rankSpan);
-            scoreEntry.appendChild(flagSpan);
-            scoreEntry.appendChild(nameSpan);
-            scoreEntry.appendChild(scoreSpan);
-            highScoresList.appendChild(scoreEntry);
-        });
-
-        // If no scores, show a message
-        if (scores.length === 0) {
-            const noScores = document.createElement('div');
-            noScores.className = 'score-entry no-scores';
-            noScores.textContent = 'No high scores yet! Be the first!';
-            highScoresList.appendChild(noScores);
+            if (success) {
+                console.log('Score submitted successfully');
+                this.showHighScores();
+            } else {
+                console.error('Failed to submit score');
+                alert('Failed to submit score. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error submitting score:', error);
+            alert('An error occurred while submitting your score. Please try again.');
         }
     }
 
     getFlagEmoji(countryCode) {
+        if (!countryCode || countryCode === 'unknown') return '🌎';
         const codePoints = countryCode
             .toUpperCase()
             .split('')
@@ -794,42 +778,142 @@ class FlappyGoose {
         return String.fromCodePoint(...codePoints);
     }
 
+    async refreshHighScores() {
+        const refreshButton = document.getElementById('refreshScores');
+        refreshButton.disabled = true;
+        refreshButton.textContent = '🔄 Refreshing...';
+        
+        try {
+            await this.showHighScores();
+            refreshButton.textContent = '✅ Updated!';
+            setTimeout(() => {
+                refreshButton.disabled = false;
+                refreshButton.textContent = '🔄 Refresh';
+            }, 1000);
+        } catch (error) {
+            refreshButton.textContent = '❌ Error';
+            setTimeout(() => {
+                refreshButton.disabled = false;
+                refreshButton.textContent = '🔄 Refresh';
+            }, 1000);
+        }
+    }
+
+    sortHighScores(method, lastAddedIndex = -1) {
+        this.currentSortMethod = method;
+        let sortedScores = [...this.currentScores];
+
+        switch (method) {
+            case 'score':
+                sortedScores.sort((a, b) => b.score - a.score);
+                break;
+            case 'date':
+                sortedScores.sort((a, b) => new Date(b.date) - new Date(a.date));
+                break;
+            case 'country':
+                sortedScores.sort((a, b) => {
+                    const countryA = a.countryName || 'Unknown';
+                    const countryB = b.countryName || 'Unknown';
+                    return countryA.localeCompare(countryB);
+                });
+                break;
+        }
+
+        // Find the new index of the last added score after sorting
+        const newLastAddedIndex = lastAddedIndex !== -1 ? 
+            sortedScores.findIndex(score => score.id === this.currentScores[lastAddedIndex].id) : -1;
+
+        this.displayHighScores(sortedScores, newLastAddedIndex);
+    }
+
+    displayHighScores(scores, lastAddedIndex) {
+        const highScoresList = document.getElementById('highScoresList');
+        highScoresList.innerHTML = ''; // Clear existing scores
+
+        if (scores.length === 0) {
+            highScoresList.innerHTML = '<li>No high scores yet!</li>';
+            return;
+        }
+
+        // Create and append score elements with animation delays
+        scores.forEach((score, index) => {
+            const li = document.createElement('li');
+            li.style.animationDelay = `${index * 0.1}s`;
+            
+            const flag = this.getFlagEmoji(score.country);
+            const countryCode = score.country === 'XX' ? '??' : score.country || '??';
+            const date = new Date(score.date);
+            const formattedDate = date.toLocaleDateString(undefined, { 
+                month: 'short', 
+                day: 'numeric'
+            });
+            
+            li.innerHTML = `
+                <span class="rank">${index + 1}</span>
+                <span class="name">${score.name}</span>
+                <span class="score">${score.score}</span>
+                <span class="country">${flag} ${countryCode}</span>
+                <span class="date">${formattedDate}</span>
+            `;
+
+            // Add full date as a tooltip
+            const fullDate = date.toLocaleDateString(undefined, { 
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            li.title = `Added: ${fullDate}`;
+
+            // Highlight the user's score
+            if (index === lastAddedIndex) {
+                li.style.background = 'rgba(255, 215, 0, 0.2)';
+                li.style.borderColor = '#FFD700';
+            }
+
+            highScoresList.appendChild(li);
+        });
+
+        // Scroll to the user's score if it exists
+        if (lastAddedIndex !== -1) {
+            const scoreElements = highScoresList.children;
+            if (scoreElements[lastAddedIndex]) {
+                setTimeout(() => {
+                    scoreElements[lastAddedIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 500); // Wait for animations to complete
+            }
+        }
+    }
+
+    async showHighScores() {
+        // Show the high scores screen
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.remove('visible');
+            screen.classList.add('hidden');
+        });
+        document.getElementById('highScoresScreen').classList.remove('hidden');
+        document.getElementById('highScoresScreen').classList.add('visible');
+
+        try {
+            console.log('Fetching high scores...');
+            // Get high scores from Firebase
+            const { scores, lastAddedIndex } = await this.highScoreManager.getHighScores();
+            this.currentScores = scores;
+            
+            // Sort using current method
+            this.sortHighScores(this.currentSortMethod, lastAddedIndex);
+        } catch (error) {
+            console.error('Error displaying high scores:', error);
+            document.getElementById('highScoresList').innerHTML = '<li>Error loading high scores</li>';
+        }
+    }
+
     hideHighScores() {
         document.getElementById('highScoresScreen').classList.remove('visible');
         document.getElementById('highScoresScreen').classList.add('hidden');
-        
-        // If game is over, remove high score entry elements and show game over options
-        if (this.gameOver) {
-            const highScoreEntry = document.getElementById('highScoreEntry');
-            
-            // Remove placement message if it exists
-            const placementMsg = highScoreEntry.querySelector('.placement-message');
-            if (placementMsg) {
-                placementMsg.remove();
-            }
-            
-            // Hide all high score entry elements
-            const nameInput = document.getElementById('playerName');
-            const submitButton = document.getElementById('submitScore');
-            nameInput.style.display = 'none';
-            submitButton.style.display = 'none';
-            nameInput.value = '';
-            
-            // Hide high score entry and show game over options
-            highScoreEntry.classList.add('hidden');
-            document.getElementById('gameOverOptions').classList.remove('hidden');
-            
-            // Reset high score announcement
-            const announcement = document.querySelector('.high-score-announcement');
-            if (announcement) {
-                announcement.style.opacity = '0';
-            }
-        }
-        
-        const screenToShow = this.gameOver ? 'gameOverScreen' : 'startScreen';
-        const screen = document.getElementById(screenToShow);
-        screen.classList.remove('hidden');
-        screen.classList.add('visible');
+        document.getElementById('startScreen').classList.remove('hidden');
+        document.getElementById('startScreen').classList.add('visible');
     }
 }
 
