@@ -536,7 +536,7 @@
 
         #highScoresList li {
             display: grid;
-            grid-template-columns: 25px minmax(60px, 1fr) 40px 55px 45px;
+            grid-template-columns: 25px minmax(60px, 1fr) 40px 55px 35px;
             gap: 8px;
             padding: 8px;
             margin: 5px 0;
@@ -581,10 +581,11 @@
         #highScoresList .date {
             color: #888888;
             text-align: right;
-            font-size: 9px;
+            font-size: 8px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            padding-right: 2px;
         }
 
         .high-scores-controls {
@@ -644,7 +645,7 @@
         /* Responsive adjustments */
         @media (max-width: 360px) {
             #highScoresList li {
-                grid-template-columns: 20px minmax(50px, 1fr) 35px 45px 40px;
+                grid-template-columns: 20px minmax(50px, 1fr) 35px 45px 30px;
                 font-size: 8px;
                 padding: 6px;
                 gap: 4px;
