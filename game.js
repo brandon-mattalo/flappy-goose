@@ -134,13 +134,28 @@ class FlappyGoose {
 
         // Visual effects
         this.visualEffects = {
+            backgroundHue: 0,
             stars: [],
             fireworks: [],
-            mapleLeaves: [],
-            lastFireworkTime: 0,
-            backgroundHue: 0,
+            particles: [],
             pulseValue: 0,
-            pulseDirection: 1
+            pulseDirection: 0.02,
+            mountainHue: 0,
+            lastFireworkTime: 0,
+            discoBall: {
+                y: -50, // Start above the screen
+                targetY: 0, // Will be set when activated
+                active: false,
+                rays: [],
+                lastRayTime: 0,
+                rotation: 0
+            },
+            spaceMode: {
+                active: false,
+                transition: 0,
+                planets: [],
+                ufos: []
+            }
         };
 
         // Create initial stars
@@ -149,9 +164,9 @@ class FlappyGoose {
         // Parallax mountains
         this.mountains = {
             layers: [
-                { mountains: [], speed: 0.2, color: '#4B6584', y: this.canvas.height * 0.75, baseColor: '#4B6584' },
-                { mountains: [], speed: 0.4, color: '#2C3A47', y: this.canvas.height * 0.8, baseColor: '#2C3A47' },
-                { mountains: [], speed: 0.6, color: '#1B2631', y: this.canvas.height * 0.85, baseColor: '#1B2631' }
+                { mountains: [], speed: 0.2, color: '#4B6584', y: this.canvas.height * 0.75, baseColor: '#4B6584', targetColor: '#4B6584', colorTransition: 0 },
+                { mountains: [], speed: 0.4, color: '#2C3A47', y: this.canvas.height * 0.8, baseColor: '#2C3A47', targetColor: '#2C3A47', colorTransition: 0 },
+                { mountains: [], speed: 0.6, color: '#1B2631', y: this.canvas.height * 0.85, baseColor: '#1B2631', targetColor: '#1B2631', colorTransition: 0 }
             ]
         };
 
@@ -234,11 +249,44 @@ class FlappyGoose {
         this.flockGeese = [];
         this.lastFlockScore = 0;
 
+        // Reset all visual effects
+        this.resetAllVisualEffects();
+
         // Make canvas active
         this.canvas.classList.add('active');
         
         // Start game loop
         requestAnimationFrame(() => this.update());
+    }
+    
+    resetAllVisualEffects() {
+        // Reset disco ball
+        this.visualEffects.discoBall.active = false;
+        this.visualEffects.discoBall.rays = [];
+        
+        // Reset space mode
+        this.visualEffects.spaceMode.active = false;
+        this.visualEffects.spaceMode.transition = 0;
+        this.visualEffects.spaceMode.planets = [];
+        this.visualEffects.spaceMode.ufos = [];
+        
+        // Reset fireworks and particles
+        this.visualEffects.fireworks = [];
+        this.visualEffects.particles = [];
+        this.visualEffects.lastFireworkTime = 0;
+        
+        // Reset pulse effect
+        this.visualEffects.pulseValue = 0;
+        this.visualEffects.pulseDirection = 0.02;
+        
+        // Reset stars (remove maple leaves, but keep colored stars)
+        this.stars = this.stars.filter(star => !star.isMapleLeaf);
+        
+        // Reset mountain colors to base colors
+        this.mountains.layers.forEach(layer => {
+            layer.color = layer.baseColor;
+            layer.colorTransition = 0;
+        });
     }
     
     restart() {
@@ -593,6 +641,26 @@ class FlappyGoose {
             this.speedMultiplier = 1 + Math.floor(this.score / 10) * 0.1;
             this.treeSpeed = this.baseSpeed * this.speedMultiplier;
 
+            // Update visual effects
+            this.visualEffects.backgroundHue = (this.visualEffects.backgroundHue + 0.5) % 360;
+            this.visualEffects.mountainHue = (this.visualEffects.mountainHue + 0.3) % 360;
+            
+            // Disco ball rotation
+            if (this.visualEffects.discoBall.active) {
+                this.visualEffects.discoBall.rotation += 0.5;
+                this.updateDiscoBall();
+            }
+
+            // Space mode transition
+            if (this.score >= 100 && !this.visualEffects.spaceMode.active) {
+                this.activateSpaceMode();
+            }
+
+            // Update planets and UFOs in space mode
+            if (this.visualEffects.spaceMode.active) {
+                this.updateSpaceObjects();
+            }
+
             // Update mountains
             this.updateMountains();
 
@@ -662,15 +730,16 @@ class FlappyGoose {
                     this.visualEffects.lastFireworkTime = this.score;
                 }
 
-                // Update visual effects based on new milestones
-                if (this.score >= 10) {
+                // Update visual effects based on milestones
+                if (this.score >= 10 && this.score < 100) {
                     this.stars.forEach(star => {
                         if (!star.color) {
                             star.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
                         }
                     });
                 }
-                if (this.score >= 20) {
+                
+                if (this.score >= 20 && this.score < 100) {
                     // Add maple leaves if not already present
                     if (!this.stars.some(star => star.isMapleLeaf)) {
                         for (let i = 0; i < 20; i++) {
@@ -686,18 +755,67 @@ class FlappyGoose {
                         }
                     }
                 }
+
+                // Disco ball at score 50
+                if (this.score === 50 && !this.visualEffects.discoBall.active) {
+                    this.activateDiscoBall();
+                }
+                
+                // Reset at score 100
+                if (this.score === 100) {
+                    this.resetMilestones();
+                }
+                
+                // Space mode milestones
+                if (this.score === 110 && this.visualEffects.spaceMode.active && this.visualEffects.spaceMode.planets.length === 0) {
+                    this.createPlanets();
+                }
+                
+                if (this.score === 120 && this.visualEffects.spaceMode.active) {
+                    this.createUFOs();
+                }
+                
+                if (this.score === 150 && this.visualEffects.spaceMode.active) {
+                    this.activateDiscoBall();
+                }
+            }
+            
+            // Periodically add new planets if we have few planets in space mode
+            if (this.visualEffects.spaceMode.active && this.score >= 110 && 
+                Math.random() < 0.005 && this.visualEffects.spaceMode.planets.length < 3) {
+                const radius = Math.random() * 15 + 10;
+                this.visualEffects.spaceMode.planets.push({
+                    x: this.canvas.width + (Math.random() * this.canvas.width / 2),
+                    y: Math.random() * this.canvas.height * 0.6 + this.canvas.height * 0.15,
+                    radius: radius,
+                    speed: Math.random() * 0.15 + 0.05,
+                    color: `hsl(${Math.random() * 360}, 70%, 50%)`,
+                    hue: Math.random() * 360,
+                    rings: Math.random() < 0.3
+                });
+            }
+            
+            // Update planet color transitions at 130+
+            if (this.score >= 130 && this.visualEffects.spaceMode.active) {
+                this.updatePlanetColors();
+            }
+            
+            // Update background color at 140+
+            if (this.score >= 140 && this.visualEffects.spaceMode.active) {
+                this.visualEffects.backgroundHue = (this.visualEffects.backgroundHue + 1) % 360;
             }
 
             // Update background effects at new milestones
-            if (this.score >= 30) {
+            if (this.score >= 30 && this.score < 100) {
                 this.visualEffects.backgroundHue = (this.visualEffects.backgroundHue + 1) % 360;
             }
-            if (this.score >= 40) {
+            
+            if (this.score >= 40 && this.score < 100) {
                 this.visualEffects.pulseValue += 0.05 * this.visualEffects.pulseDirection;
                 if (this.visualEffects.pulseValue >= 1) {
-                    this.visualEffects.pulseDirection = -1;
+                    this.visualEffects.pulseDirection = -0.02;
                 } else if (this.visualEffects.pulseValue <= 0) {
-                    this.visualEffects.pulseDirection = 1;
+                    this.visualEffects.pulseDirection = 0.02;
                 }
             }
 
@@ -735,29 +853,49 @@ class FlappyGoose {
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Draw background with effects
-        if (this.score >= 30) {
-            const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-            gradient.addColorStop(0, `hsl(${this.visualEffects.backgroundHue}, 60%, 70%)`);
-            gradient.addColorStop(1, `hsl(${(this.visualEffects.backgroundHue + 60) % 360}, 60%, 70%)`);
-            this.ctx.fillStyle = gradient;
+        // Draw space background if in space mode
+        if (this.visualEffects.spaceMode.active) {
+            this.drawSpaceBackground();
         } else {
-            const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-            const skyDarkness = Math.min(0.6, (this.speedMultiplier - 1) * 0.3);
-            gradient.addColorStop(0, `rgb(${135 * (1-skyDarkness)}, ${206 * (1-skyDarkness)}, ${235 * (1-skyDarkness)})`);
-            gradient.addColorStop(1, `rgb(${224 * (1-skyDarkness)}, ${246 * (1-skyDarkness)}, ${255 * (1-skyDarkness)})`);
-            this.ctx.fillStyle = gradient;
+            // Draw normal background with effects
+            if (this.score >= 30) {
+                const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+                gradient.addColorStop(0, `hsl(${this.visualEffects.backgroundHue}, 60%, 70%)`);
+                gradient.addColorStop(1, `hsl(${(this.visualEffects.backgroundHue + 60) % 360}, 60%, 70%)`);
+                this.ctx.fillStyle = gradient;
+            } else {
+                const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+                const skyDarkness = Math.min(0.6, (this.speedMultiplier - 1) * 0.3);
+                gradient.addColorStop(0, `rgb(${135 * (1-skyDarkness)}, ${206 * (1-skyDarkness)}, ${235 * (1-skyDarkness)})`);
+                gradient.addColorStop(1, `rgb(${224 * (1-skyDarkness)}, ${246 * (1-skyDarkness)}, ${255 * (1-skyDarkness)})`);
+                this.ctx.fillStyle = gradient;
+            }
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         }
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw stars
-        this.drawStars();
+        // Draw stars only if not in full space mode
+        if (!this.visualEffects.spaceMode.active || this.visualEffects.spaceMode.transition < 0.8) {
+            this.drawStars();
+        }
 
-        // Draw mountains and their objects
-        this.drawMountains();
+        // Draw mountains with transition effect for space mode
+        if (!this.visualEffects.spaceMode.active || this.visualEffects.spaceMode.transition < 0.9) {
+            // Use transition to make mountains fade away
+            const mountainOpacity = this.visualEffects.spaceMode.active ? 
+                Math.max(0, 1 - this.visualEffects.spaceMode.transition * 1.5) : 1;
+                
+            if (mountainOpacity > 0) {
+                this.ctx.globalAlpha = mountainOpacity;
+                this.drawMountains();
+                this.ctx.globalAlpha = 1;
+            }
+        }
 
         // Draw fireworks
         this.drawFireworks();
+        
+        // Draw disco ball (in front of mountains, behind trees and goose)
+        this.drawDiscoBall();
         
         // Draw trees
         this.trees.forEach(tree => {
@@ -784,7 +922,7 @@ class FlappyGoose {
         this.ctx.fillText(`Speed: ${this.speedMultiplier.toFixed(1)}x`, 10, 60);
 
         // Apply screen pulse effect
-        if (this.score >= 40) {
+        if (this.score >= 40 && this.score < 100) {
             this.ctx.fillStyle = `rgba(255, 255, 255, ${this.visualEffects.pulseValue * 0.2})`;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         }
@@ -1200,12 +1338,25 @@ class FlappyGoose {
     }
 
     updateMountains() {
-        // Update mountain positions
+        // Update mountain positions and colors
         this.mountains.layers.forEach((layer, index) => {
             // Update mountain colors if score >= 10
             if (this.score >= 10) {
-                if (Math.random() < 0.02) {
-                    const hue = Math.floor(Math.random() * 360);
+                // Update mountain color transition
+                layer.colorTransition += 0.02;
+                
+                // Periodically set new target colors
+                if (layer.colorTransition >= 1) {
+                    layer.colorTransition = 0;
+                    const hue = (this.visualEffects.mountainHue + index * 40) % 360;
+                    const lightness = 30 + (20 * (1 - index/2));
+                    layer.targetColor = `hsl(${hue}, 40%, ${lightness}%)`;
+                }
+                
+                // Interpolate between current and target color
+                if (layer.colorTransition > 0 && layer.colorTransition < 1) {
+                    // We can't directly interpolate HSL strings, so we'll use the mountainHue
+                    const hue = (this.visualEffects.mountainHue + index * 40) % 360;
                     const lightness = 30 + (20 * (1 - index/2));
                     layer.color = `hsl(${hue}, 40%, ${lightness}%)`;
                 }
@@ -1213,8 +1364,9 @@ class FlappyGoose {
                 layer.color = layer.baseColor;
             }
 
+            // Update mountain positions
             layer.mountains.forEach(mountain => {
-                mountain.x -= this.treeSpeed * layer.speed * 0.5; // Slowed down mountain movement
+                mountain.x -= this.treeSpeed * layer.speed * 0.5;
             });
 
             // Remove mountains that are off screen and add new ones
@@ -1244,6 +1396,407 @@ class FlappyGoose {
                 this.ctx.closePath();
                 this.ctx.fill();
             });
+        });
+    }
+
+    activateDiscoBall() {
+        this.visualEffects.discoBall.active = true;
+        this.visualEffects.discoBall.y = -50; // Start above screen
+        this.visualEffects.discoBall.targetY = this.canvas.height / 4; // Top quarter of screen
+        this.visualEffects.discoBall.rays = [];
+        this.visualEffects.discoBall.lastRayTime = 0;
+    }
+    
+    updateDiscoBall() {
+        // Move disco ball to target position if not there yet
+        if (this.visualEffects.discoBall.y < this.visualEffects.discoBall.targetY) {
+            this.visualEffects.discoBall.y += 2;
+        }
+        
+        // Create new light rays every 100ms
+        const now = Date.now();
+        if (now - this.visualEffects.discoBall.lastRayTime > 100) {
+            this.createDiscoBallRay();
+            this.visualEffects.discoBall.lastRayTime = now;
+        }
+        
+        // Update existing rays
+        for (let i = this.visualEffects.discoBall.rays.length - 1; i >= 0; i--) {
+            const ray = this.visualEffects.discoBall.rays[i];
+            ray.length += 5;
+            ray.alpha -= 0.02;
+            
+            // Remove faded rays
+            if (ray.alpha <= 0) {
+                this.visualEffects.discoBall.rays.splice(i, 1);
+            }
+        }
+    }
+    
+    createDiscoBallRay() {
+        const ballX = this.canvas.width / 2;
+        const ballY = this.visualEffects.discoBall.y;
+        const angle = Math.random() * Math.PI * 2;
+        
+        this.visualEffects.discoBall.rays.push({
+            x: ballX,
+            y: ballY,
+            angle: angle,
+            length: 0,
+            width: Math.random() * 3 + 1,
+            alpha: 0.6
+        });
+    }
+    
+    drawDiscoBall() {
+        if (!this.visualEffects.discoBall.active) return;
+        
+        const ballX = this.canvas.width / 2;
+        const ballY = this.visualEffects.discoBall.y;
+        const ballRadius = 25;
+        
+        // Draw the hanging string
+        this.ctx.strokeStyle = '#CCCCCC';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(ballX, 0);
+        this.ctx.lineTo(ballX, ballY - ballRadius);
+        this.ctx.stroke();
+        
+        // Draw the disco ball
+        this.ctx.save();
+        this.ctx.translate(ballX, ballY);
+        
+        // Disco ball base
+        const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, ballRadius);
+        gradient.addColorStop(0, '#FFFFFF');
+        gradient.addColorStop(0.4, '#DDDDDD');
+        gradient.addColorStop(1, '#999999');
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, ballRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Disco ball grid pattern
+        this.ctx.strokeStyle = '#555555';
+        this.ctx.lineWidth = 0.5;
+        
+        // Horizontal lines
+        for (let i = -ballRadius; i <= ballRadius; i += 5) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(-Math.sqrt(ballRadius * ballRadius - i * i), i);
+            this.ctx.lineTo(Math.sqrt(ballRadius * ballRadius - i * i), i);
+            this.ctx.stroke();
+        }
+        
+        // Vertical lines with rotation
+        this.ctx.rotate(this.visualEffects.discoBall.rotation * Math.PI / 180);
+        for (let i = -ballRadius; i <= ballRadius; i += 5) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(i, -Math.sqrt(ballRadius * ballRadius - i * i));
+            this.ctx.lineTo(i, Math.sqrt(ballRadius * ballRadius - i * i));
+            this.ctx.stroke();
+        }
+        
+        this.ctx.restore();
+        
+        // Draw light rays
+        this.visualEffects.discoBall.rays.forEach(ray => {
+            this.ctx.save();
+            this.ctx.translate(ray.x, ray.y);
+            this.ctx.rotate(ray.angle);
+            
+            const gradient = this.ctx.createLinearGradient(0, 0, ray.length, 0);
+            gradient.addColorStop(0, `rgba(255, 255, 255, ${ray.alpha})`);
+            gradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+            
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, 0);
+            this.ctx.lineTo(ray.length, ray.width / 2);
+            this.ctx.lineTo(ray.length, -ray.width / 2);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
+            this.ctx.restore();
+        });
+    }
+    
+    resetMilestones() {
+        // Reset visual effects for space mode transition
+        this.visualEffects.spaceMode = {
+            active: true,
+            transition: 0,
+            planets: [],
+            ufos: []
+        };
+        
+        // Turn off disco ball
+        this.visualEffects.discoBall.active = false;
+        this.visualEffects.discoBall.rays = [];
+        
+        // Clear existing effects
+        this.visualEffects.fireworks = [];
+        
+        // Reset stars (remove maple leaves, but keep colored stars)
+        this.stars = this.stars.filter(star => !star.isMapleLeaf);
+        
+        // Reset pulse effect
+        this.visualEffects.pulseValue = 0;
+        this.visualEffects.pulseDirection = 0.02;
+    }
+    
+    activateSpaceMode() {
+        this.visualEffects.spaceMode.active = true;
+        this.visualEffects.spaceMode.transition = 0;
+    }
+    
+    updateSpaceObjects() {
+        // Update space transition
+        if (this.visualEffects.spaceMode.transition < 1) {
+            this.visualEffects.spaceMode.transition += 0.005;
+        }
+        
+        // Update planets
+        this.visualEffects.spaceMode.planets.forEach(planet => {
+            planet.x -= planet.speed * this.treeSpeed * 0.2;
+            
+            // Reset planets that move off screen
+            if (planet.x < -planet.radius * 2) {
+                // Place it far to the right and at a random height
+                planet.x = this.canvas.width + (Math.random() * this.canvas.width);
+                planet.y = Math.random() * this.canvas.height * 0.6 + this.canvas.height * 0.15;
+                // Assign new properties for variety
+                planet.radius = Math.random() * 15 + 10;
+                planet.speed = Math.random() * 0.15 + 0.05;
+                planet.rings = Math.random() < 0.3;
+            }
+            
+            // Update planet color if at score 130+
+            if (this.score >= 130) {
+                planet.hue = (planet.hue + 0.2) % 360;
+            }
+        });
+        
+        // Update UFOs
+        this.visualEffects.spaceMode.ufos.forEach(ufo => {
+            ufo.x += ufo.speedX;
+            ufo.y += Math.sin(Date.now() * 0.001 + ufo.offset) * 0.5; // Hovering motion
+            
+            // Reset UFOs that move off screen
+            if ((ufo.speedX > 0 && ufo.x > this.canvas.width + ufo.width) || 
+                (ufo.speedX < 0 && ufo.x < -ufo.width)) {
+                ufo.x = ufo.speedX > 0 ? -ufo.width : this.canvas.width + ufo.width;
+                ufo.y = Math.random() * this.canvas.height * 0.6 + this.canvas.height * 0.1;
+                ufo.beamActive = Math.random() < 0.5; // 50% chance of beam
+            }
+            
+            // Update beam effect
+            if (ufo.beamActive) {
+                ufo.beamWidth = Math.sin(Date.now() * 0.005) * 5 + 15;
+                
+                // Change beam colors at score 120+
+                if (this.score >= 120) {
+                    ufo.beamHue = (ufo.beamHue + 1) % 360;
+                }
+            }
+        });
+    }
+    
+    createPlanets() {
+        // Create just 2-3 planets - much fewer than before
+        const numPlanets = Math.floor(Math.random() * 2) + 2;
+        
+        // Space planets out evenly across a wider area 
+        for (let i = 0; i < numPlanets; i++) {
+            const radius = Math.random() * 15 + 10; // Smaller planets (10-25px radius)
+            this.visualEffects.spaceMode.planets.push({
+                x: this.canvas.width + (i * this.canvas.width), // Space them much further apart
+                y: Math.random() * this.canvas.height * 0.6 + this.canvas.height * 0.15, // Keep them in the upper portion
+                radius: radius,
+                speed: Math.random() * 0.15 + 0.05, // Much slower movement
+                color: `hsl(${Math.random() * 360}, 70%, 50%)`,
+                hue: Math.random() * 360,
+                rings: Math.random() < 0.3 // 30% chance of rings
+            });
+        }
+    }
+    
+    createUFOs() {
+        // Create 1-2 UFOs (reduced from 2-4)
+        const numUFOs = Math.floor(Math.random() * 2) + 1;
+        
+        for (let i = 0; i < numUFOs; i++) {
+            const width = Math.random() * 20 + 30;
+            const direction = Math.random() < 0.5 ? 1 : -1; // Left or right movement
+            this.visualEffects.spaceMode.ufos.push({
+                x: direction > 0 ? -width : this.canvas.width + width,
+                y: Math.random() * this.canvas.height * 0.6 + this.canvas.height * 0.1,
+                width: width,
+                height: width * 0.4,
+                speedX: direction * (Math.random() * 0.8 + 0.3), // Slightly slower
+                offset: Math.random() * Math.PI * 2, // Random phase for hovering
+                beamActive: Math.random() < 0.5, // 50% chance of beam (increased from 30%)
+                beamWidth: 15,
+                beamHue: Math.random() * 360 // Initial beam color hue
+            });
+        }
+    }
+    
+    updatePlanetColors() {
+        this.visualEffects.spaceMode.planets.forEach(planet => {
+            planet.color = `hsl(${planet.hue}, 70%, 50%)`;
+        });
+    }
+    
+    drawSpaceBackground() {
+        if (!this.visualEffects.spaceMode.active) return;
+        
+        // Transition background to black
+        const transition = this.visualEffects.spaceMode.transition;
+        
+        // Background gradient based on transition and score
+        if (this.score >= 140) {
+            // Colorful space background at score 140+
+            const bgHue = this.visualEffects.backgroundHue;
+            const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+            gradient.addColorStop(0, `hsla(${bgHue}, 70%, 20%, ${transition})`);
+            gradient.addColorStop(1, `hsla(${(bgHue + 60) % 360}, 70%, 10%, ${transition})`);
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        } else {
+            // Black space background during transition
+            this.ctx.fillStyle = `rgba(0, 0, 0, ${transition})`;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+        
+        // Draw stars with space transition
+        if (transition > 0.2) {
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${transition})`;
+            for (let i = 0; i < 200; i++) {
+                const x = (i * 13) % this.canvas.width;
+                const y = ((i * 17) % this.canvas.height);
+                const size = Math.random() * 2 + 0.5;
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, size, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+        
+        // Draw planets at score 110+ (drawn before UFOs for proper layering)
+        if (this.score >= 110) {
+            this.drawPlanets();
+        }
+        
+        // Draw UFOs at score 120+
+        if (this.score >= 120) {
+            this.drawUFOs();
+        }
+    }
+    
+    drawPlanets() {
+        // Use globalAlpha to make planets more subtle in the background
+        this.ctx.globalAlpha = 0.8;
+        
+        this.visualEffects.spaceMode.planets.forEach(planet => {
+            // Add subtle glow around planets
+            const glow = this.ctx.createRadialGradient(
+                planet.x, planet.y, planet.radius * 0.8,
+                planet.x, planet.y, planet.radius * 1.5
+            );
+            glow.addColorStop(0, `hsla(${planet.hue}, 70%, 50%, 0.3)`);
+            glow.addColorStop(1, `hsla(${planet.hue}, 70%, 50%, 0)`);
+            this.ctx.fillStyle = glow;
+            this.ctx.beginPath();
+            this.ctx.arc(planet.x, planet.y, planet.radius * 1.5, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Planet body
+            this.ctx.fillStyle = planet.color;
+            this.ctx.beginPath();
+            this.ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Planet shading
+            const gradient = this.ctx.createRadialGradient(
+                planet.x - planet.radius * 0.3, planet.y - planet.radius * 0.3,
+                0,
+                planet.x, planet.y,
+                planet.radius
+            );
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0.6)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Draw rings for some planets
+            if (planet.rings) {
+                this.ctx.save();
+                this.ctx.translate(planet.x, planet.y);
+                this.ctx.rotate(Math.PI / 6);
+                this.ctx.scale(1, 0.3);
+                this.ctx.strokeStyle = planet.color;
+                this.ctx.lineWidth = 2; // Thinner rings
+                this.ctx.beginPath();
+                this.ctx.arc(0, 0, planet.radius * 1.5, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.restore();
+            }
+        });
+        
+        // Reset global alpha
+        this.ctx.globalAlpha = 1;
+    }
+    
+    drawUFOs() {
+        this.visualEffects.spaceMode.ufos.forEach(ufo => {
+            // Draw beam if active
+            if (ufo.beamActive) {
+                // Use changing colors for beams at score 120+
+                const beamColor = this.score >= 120 ? 
+                    `hsla(${ufo.beamHue}, 100%, 70%, 0.8)` : 
+                    'rgba(150, 255, 150, 0.8)';
+                    
+                const gradient = this.ctx.createLinearGradient(
+                    ufo.x, ufo.y + ufo.height / 2,
+                    ufo.x, this.canvas.height
+                );
+                gradient.addColorStop(0, beamColor);
+                gradient.addColorStop(1, 'rgba(150, 255, 150, 0)');
+                
+                this.ctx.fillStyle = gradient;
+                this.ctx.beginPath();
+                this.ctx.moveTo(ufo.x - ufo.beamWidth, ufo.y + ufo.height / 2);
+                this.ctx.lineTo(ufo.x + ufo.beamWidth, ufo.y + ufo.height / 2);
+                this.ctx.lineTo(ufo.x + ufo.beamWidth * 2, this.canvas.height);
+                this.ctx.lineTo(ufo.x - ufo.beamWidth * 2, this.canvas.height);
+                this.ctx.closePath();
+                this.ctx.fill();
+            }
+            
+            // Draw UFO body
+            this.ctx.fillStyle = '#DDDDDD';
+            this.ctx.beginPath();
+            this.ctx.ellipse(ufo.x, ufo.y, ufo.width / 2, ufo.height / 2, 0, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Draw UFO dome
+            this.ctx.fillStyle = '#88CCFF';
+            this.ctx.beginPath();
+            this.ctx.ellipse(ufo.x, ufo.y - ufo.height / 4, ufo.width / 3, ufo.height / 3, 0, 0, Math.PI, true);
+            this.ctx.fill();
+            
+            // Draw lights
+            for (let i = 0; i < 5; i++) {
+                const lightX = ufo.x - ufo.width / 2 + (ufo.width / 4) * i;
+                const pulseIntensity = Math.sin(Date.now() * 0.01 + i) * 0.5 + 0.5;
+                this.ctx.fillStyle = `rgba(255, 255, 0, ${pulseIntensity})`;
+                this.ctx.beginPath();
+                this.ctx.arc(lightX, ufo.y + ufo.height / 6, ufo.width / 12, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
         });
     }
 }
